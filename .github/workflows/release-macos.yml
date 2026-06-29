@@ -7,7 +7,7 @@ on:
         description: Release tag (e.g. v1.1.2)
         required: true
       gitee_repo:
-        description: Gitee source URL
+        description: Gitee source URL (no credentials in URL)
         required: false
         default: https://gitee.com/psvmc/z-git-tools-wails.git
 
@@ -19,7 +19,26 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Clone from Gitee
-        run: git clone --depth 1 "${{ inputs.gitee_repo }}" repo
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ inputs.gitee_repo }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITEE_TOKEN:-}" ]; then
+            echo "::error::Private Gitee repo requires secret GITEE_TOKEN on this repository."
+            echo "Create token: https://gitee.com/profile/personal_access_tokens (scope: projects)"
+            echo "Then: gh secret set GITEE_TOKEN -R psvmc/z-git-releases"
+            exit 1
+          fi
+          REPO_PATH="${GITEE_REPO#https://}"
+          AUTH_URL="https://oauth2:${GITEE_TOKEN}@${REPO_PATH}"
+          if git clone --depth 1 --branch "$RELEASE_TAG" "$AUTH_URL" repo 2>/dev/null; then
+            echo "Cloned tag $RELEASE_TAG"
+          else
+            echo "Tag $RELEASE_TAG not found, cloning default branch..."
+            git clone --depth 1 "$AUTH_URL" repo
+          fi
 
       - uses: actions/setup-go@v5
         with:
