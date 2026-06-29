@@ -37,12 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${GITEE_TOKEN:-}" ]; then
-            echo "::error::Set secret GITEE_TOKEN on this repository (Gitee private token, scope: projects)"
+          GITEE_TOKEN="$(printf '%s' "${GITEE_TOKEN}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          if [ -z "${GITEE_TOKEN}" ]; then
+            echo "::error::GITEE_TOKEN is empty. Run scripts/release/set-gitee-token.bat on Windows, or gh secret set ... --body"
             exit 1
           fi
           REPO_PATH="${GITEE_REPO#https://}"
-          AUTH_URL="https://oauth2:${GITEE_TOKEN}@${REPO_PATH}"
+          CLONE_URL="https://${REPO_PATH}"
+          export GITEE_TOKEN
 
           git config --global http.postBuffer 524288000
           git config --global http.version HTTP/1.1
@@ -55,21 +57,36 @@ jobs:
           fi
 
           clone_ok=false
+          last_err=""
           for TAG in "${TAG_CANDIDATES[@]}"; do
             for attempt in 1 2 3; do
               echo "Cloning tag ${TAG} (attempt ${attempt})..."
               rm -rf repo
-              if git clone --depth 1 --branch "$TAG" "$AUTH_URL" repo; then
+              set +e
+              err=$(
+                GIT_TERMINAL_PROMPT=0 git -c credential.helper= \
+                  -c "credential.helper=!f() { echo username=oauth2; echo password=${GITEE_TOKEN}; }; f" \
+                  clone --depth 1 --branch "$TAG" "$CLONE_URL" repo 2>&1
+              )
+              code=$?
+              set -e
+              if [ "$code" -eq 0 ]; then
                 echo "Cloned tag ${TAG}"
                 clone_ok=true
                 break 2
               fi
+              last_err="$err"
+              echo "$err"
               sleep $((attempt * 5))
             done
           done
 
           if [ "$clone_ok" != true ]; then
-            echo "::error::Failed to clone tag ${RELEASE_TAG} from Gitee. Push the tag first: git tag ${RELEASE_TAG#v} && git push origin ${RELEASE_TAG#v}"
+            echo "::error::Failed to clone tag ${RELEASE_TAG} from Gitee."
+            echo "::error::Check: 1) git push origin ${RELEASE_TAG#v}  2) GITEE_TOKEN valid (projects scope)  3) re-set token via set-gitee-token.bat"
+            if [ -n "$last_err" ]; then
+              echo "::error::Git said: ${last_err}"
+            fi
             exit 1
           fi
 
