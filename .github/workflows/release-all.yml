@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag (e.g. 1.2.0)
+        description: Release tag (e.g. 1.2.1)
         required: true
       gitee_repo:
         description: Gitee source URL (no credentials)
@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           GITEE_TOKEN="$(printf '%s' "${GITEE_TOKEN}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
           if [ -z "${GITEE_TOKEN}" ]; then
-            echo "::error::GITEE_TOKEN is empty. Run scripts/release/set-gitee-token.bat on Windows, or gh secret set ... --body"
+            echo "::error::GITEE_TOKEN is empty. Run: gh secret set GITEE_TOKEN -R <repo> --body \"YOUR_GITEE_TOKEN\""
             exit 1
           fi
           REPO_PATH="${GITEE_REPO#https://}"
@@ -83,7 +83,7 @@ jobs:
 
           if [ "$clone_ok" != true ]; then
             echo "::error::Failed to clone tag ${RELEASE_TAG} from Gitee."
-            echo "::error::Check: 1) git push origin ${RELEASE_TAG#v}  2) GITEE_TOKEN valid (projects scope)  3) re-set token via set-gitee-token.bat"
+            echo "::error::Check: 1) git push origin ${RELEASE_TAG#v}  2) GITEE_TOKEN valid (projects scope)  3) gh secret set GITEE_TOKEN --body"
             if [ -n "$last_err" ]; then
               echo "::error::Git said: ${last_err}"
             fi
@@ -132,8 +132,8 @@ jobs:
             fi
             cp -f bin/ZGit.exe release/ZGit-windows-amd64.exe
           elif [ "${{ matrix.platform }}" = "linux" ]; then
-            if wails3 task linux:package; then
-              cp -f bin/*.AppImage bin/*.deb bin/*.rpm bin/*.zst release/ 2>/dev/null || true
+            if wails3 task linux:create:deb && wails3 task linux:create:rpm; then
+              cp -f bin/*.deb bin/*.rpm release/ 2>/dev/null || true
             else
               wails3 task linux:build
               cp -f bin/ZGit release/ZGit-linux-amd64
