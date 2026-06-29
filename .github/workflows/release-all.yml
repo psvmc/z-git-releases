@@ -43,11 +43,34 @@ jobs:
           fi
           REPO_PATH="${GITEE_REPO#https://}"
           AUTH_URL="https://oauth2:${GITEE_TOKEN}@${REPO_PATH}"
-          if git clone --depth 1 --branch "$RELEASE_TAG" "$AUTH_URL" repo 2>/dev/null; then
-            echo "Cloned tag $RELEASE_TAG"
+
+          git config --global http.postBuffer 524288000
+          git config --global http.version HTTP/1.1
+
+          TAG_CANDIDATES=("$RELEASE_TAG")
+          if [[ "$RELEASE_TAG" == v* ]]; then
+            TAG_CANDIDATES+=("${RELEASE_TAG#v}")
           else
-            echo "Tag $RELEASE_TAG not found on Gitee, cloning default branch..."
-            git clone --depth 1 "$AUTH_URL" repo
+            TAG_CANDIDATES+=("v${RELEASE_TAG}")
+          fi
+
+          clone_ok=false
+          for TAG in "${TAG_CANDIDATES[@]}"; do
+            for attempt in 1 2 3; do
+              echo "Cloning tag ${TAG} (attempt ${attempt})..."
+              rm -rf repo
+              if git clone --depth 1 --branch "$TAG" "$AUTH_URL" repo; then
+                echo "Cloned tag ${TAG}"
+                clone_ok=true
+                break 2
+              fi
+              sleep $((attempt * 5))
+            done
+          done
+
+          if [ "$clone_ok" != true ]; then
+            echo "::error::Failed to clone tag ${RELEASE_TAG} from Gitee. Push the tag first: git tag ${RELEASE_TAG#v} && git push origin ${RELEASE_TAG#v}"
+            exit 1
           fi
 
       - uses: actions/setup-go@v5
