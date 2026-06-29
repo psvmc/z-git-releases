@@ -100,7 +100,7 @@ jobs:
             fi
           else
             wails3 task darwin:package:universal
-            ditto -c -k --sequesterResource --keepParent bin/ZGit.app release/ZGit-macos-universal.zip
+            ditto -c -k --keepParent bin/ZGit.app release/ZGit-macos-universal.zip
           fi
           ls -la release/
 
