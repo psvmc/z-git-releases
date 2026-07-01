@@ -124,14 +124,8 @@ jobs:
           mkdir -p release
 
           if [ "${{ matrix.platform }}" = "windows" ]; then
-            if command -v makensis >/dev/null 2>&1; then
-              wails3 task windows:package
-              cp -f bin/*-installer.exe release/ 2>/dev/null || true
-            else
-              echo "NSIS not found, building exe only"
-              wails3 task build
-            fi
-            cp -f bin/ZGit.exe release/ZGit-windows-amd64.exe
+            wails3 task windows:package
+            cp -f bin/*-installer.exe release/
           elif [ "${{ matrix.platform }}" = "linux" ]; then
             if wails3 task linux:create:deb && wails3 task linux:create:rpm; then
               cp -f bin/*.deb bin/*.rpm release/ 2>/dev/null || true
